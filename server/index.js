@@ -5,6 +5,8 @@ import path from "path";
 import { spawn } from "child_process";
 import { v4 as uuid } from "uuid";
 import { fileURLToPath } from "url";
+import ffmpegPath from "ffmpeg-static";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +16,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-const FFMPEG_PATH = "C:\\Users\\MSK KHAN\\Downloads\\ffmpeg-8.0.1-full_build\\ffmpeg-8.0.1-full_build\\bin";
+const FFMPEG_PATH = ffmpegPath;
 
 const TEMP = path.join(__dirname, "temp");
 if (!fs.existsSync(TEMP)) fs.mkdirSync(TEMP);
