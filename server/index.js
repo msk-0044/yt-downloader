@@ -233,4 +233,6 @@ setInterval(()=>{
 }, 30 * 60 * 1000); // runs every 30 minutes
 
 
-app.listen(5000,()=>console.log("SERVER RUNNING 5000"));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log("SERVER RUNNING"));
+
