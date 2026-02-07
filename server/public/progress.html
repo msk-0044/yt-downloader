@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Downloading Video | YT-Downloader PRO | M$K </title>
+<style>
+body{
+background:#030304;
+font-family:sans-serif;
+display:flex;
+align-items:center;
+justify-content:center;
+height:100vh;
+color:white;
+}
+
+/* .card{
+width:460px;
+background:linear-gradient(180deg,#2b0000,#120000);
+border-radius:20px;
+padding:20px;
+box-shadow:0 0 60px rgba(120,0,0,.5);
+} */
+
+
+.card{
+  width:92%;
+  max-width:480px;
+  padding:26px;
+  border-radius:26px;
+
+  background:linear-gradient(180deg,#3b0011,#170005);
+  backdrop-filter:blur(40px);
+
+  box-shadow:
+  0 0 0 1px rgba(255,0,80,.25),
+  0 50px 120px rgba(0,0,0,.9);
+}
+
+
+img{width:100%;border-radius:14px}
+
+.bar{
+height:14px;
+background:#000;
+border-radius:10px;
+margin-top:15px;
+overflow:hidden;
+}
+.fill{
+height:100%;
+width:0%;
+background:linear-gradient(90deg,#ff003c,#ff5a5a);
+}
+
+.btn{
+margin-top:20px;
+background:#ff003c;
+padding:12px;
+text-align:center;
+border-radius:10px;
+cursor:pointer;
+}
+
+</style>
+</head>
+
+<body>
+<div class="card">
+<img id="thumb">
+<h3 id="title"></h3>
+<p >Duration: <span id="dur"></span></p>
+
+<div class="bar"><div class="fill" id="fill"></div></div>
+<p id="p">0%</p>
+<p id="doneMsg" style="margin-top:10px;font-weight:bold;color:#4ade80;"></p>
+<p id="size"></p>
+
+<div class="btn" onclick="cancel()">Cancel</div>
+</div>
+
+<script>
+const job=new URLSearchParams(location.search).get("job");
+
+async function loop(){
+ const r=await fetch(`/progress/${job}`);
+ const d=await r.json();
+
+ if(!d)return;
+
+ document.getElementById("thumb").src=d.thumbnail||"";
+ document.getElementById("title").innerText=d.title||"";
+ document.getElementById("dur").innerText=d.duration||"";
+ document.getElementById("fill").style.width=d.progress+"%";
+ document.getElementById("p").innerText=d.progress+"%";
+ document.getElementById("size").innerText=
+   (d.downloaded||"0")+" / "+(d.total||"0");
+
+ if(d.progress>=100){
+  document.getElementById("p").innerText = "100%";
+
+  document.getElementById("doneMsg").innerText =
+    "Download completed. Enjoy your file 👍";
+
+  setTimeout(()=>{
+  const a = document.createElement("a");
+  a.href = `/file/${job}`;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+},1200);
+}
+
+
+ setTimeout(loop,700);
+}
+loop();
+
+function cancel(){
+ fetch(`/cancel/${job}`);
+ window.close();
+}
+</script>
+</body>
+</html>
