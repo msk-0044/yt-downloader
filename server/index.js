@@ -15,8 +15,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+const COOKIE_PATH = path.join(__dirname, "cookies.txt");
 const FFMPEG_PATH = ffmpegPath;
-const COOKIE_PATH = path.join(__dirname, "cookies.txt"); // ⭐ cookies
 
 const TEMP = path.join(__dirname, "temp");
 if (!fs.existsSync(TEMP)) fs.mkdirSync(TEMP);
@@ -50,55 +50,71 @@ function mbToStr(mb){
 ////////////////////////////////////////////////////////////
 
 app.get("/video", async (req, res) => {
-  try {
-    const url = req.query.url;
+  const url = req.query.url;
 
-    const json = await ytdlp(url, {
+  try {
+    // try normal
+    let json = await ytdlp(url, {
       dumpSingleJson: true,
       noWarnings: true,
-      noCheckCertificates: true,
-      preferFreeFormats: true,
-
-      cookies: "./cookies.txt",
-
-      extractorArgs: "youtube:player_client=android",
-
-      addHeader: [
-        "user-agent:Mozilla/5.0",
-        "accept-language:en-US,en;q=0.9"
-      ]
+      cookies: COOKIE_PATH
     });
 
-    const seen = new Set();
-    const formats = [];
-
-    json.formats.forEach(f => {
-      if (f.vcodec !== "none" && f.height) {
-        const q = `${f.height}p`;
-        if (!seen.has(q)) {
-          seen.add(q);
-          formats.push({ quality: q, format_id: f.format_id });
-        }
-      }
-    });
-
-    res.json({
-      title: json.title,
-      thumbnail: json.thumbnail,
-      duration: format(json.duration),
-      rawDuration: json.duration,
-      formats
-    });
+    return sendFormats(json, res);
 
   } catch (e) {
-    console.log("VIDEO ERROR:", e.stderr || e);
-    res.status(500).send("Failed to fetch video info");
+    console.log("TRY 1 FAILED");
+
+    try {
+      // android fallback
+      let json = await ytdlp(url, {
+        dumpSingleJson: true,
+        noWarnings: true,
+        cookies: COOKIE_PATH,
+        extractorArgs: "youtube:player_client=android"
+      });
+
+      return sendFormats(json, res);
+
+    } catch (e2) {
+      console.log("TRY 2 FAILED → fallback 360p");
+
+      return res.json({
+        title: "Video available (limited)",
+        thumbnail: "",
+        duration: "0:00",
+        rawDuration: 0,
+        formats: [{ quality: "360p", format_id: "18" }]
+      });
+    }
   }
 });
 
+function sendFormats(json, res){
+  const seen = new Set();
+  const formats = [];
+
+  json.formats.forEach(f => {
+    if (f.vcodec !== "none" && f.height) {
+      const q = `${f.height}p`;
+      if (!seen.has(q)) {
+        seen.add(q);
+        formats.push({ quality: q, format_id: f.format_id });
+      }
+    }
+  });
+
+  res.json({
+    title: json.title,
+    thumbnail: json.thumbnail,
+    duration: format(json.duration),
+    rawDuration: json.duration,
+    formats
+  });
+}
 
 ////////////////////////////////////////////////////////////
-//////////////////// DOWNLOAD //////////////////////////////
+//////////////////// DOWNLOAD VIDEO ////////////////////////
 ////////////////////////////////////////////////////////////
 
 app.get("/download", async (req, res) => {
@@ -122,7 +138,7 @@ app.get("/download", async (req, res) => {
     mergeOutputFormat: "mp4",
     output: file,
     ffmpegLocation: FFMPEG_PATH,
-    cookies: COOKIE_PATH   // ⭐
+    cookies: COOKIE_PATH
   });
 
   process.stdout.on("data", d => {
@@ -148,7 +164,7 @@ app.get("/download", async (req, res) => {
 });
 
 ////////////////////////////////////////////////////////////
-//////////////////// MP3 //////////////////////////////////
+//////////////////// MP3 /////////////////////////////////
 ////////////////////////////////////////////////////////////
 
 app.get("/mp3", async (req, res) => {
@@ -172,7 +188,7 @@ app.get("/mp3", async (req, res) => {
     audioFormat: "mp3",
     output: `${fileBase}.%(ext)s`,
     ffmpegLocation: FFMPEG_PATH,
-    cookies: COOKIE_PATH   // ⭐
+    cookies: COOKIE_PATH
   });
 
   process.stdout.on("data", d => {
@@ -198,10 +214,16 @@ app.get("/mp3", async (req, res) => {
 });
 
 ////////////////////////////////////////////////////////////
+//////////////////// PROGRESS //////////////////////////////
+////////////////////////////////////////////////////////////
 
 app.get("/progress/:id",(req,res)=>{
   res.json(jobs[req.params.id]||{});
 });
+
+////////////////////////////////////////////////////////////
+//////////////////// FILE //////////////////////////////////
+////////////////////////////////////////////////////////////
 
 app.get("/file/:id",(req,res)=>{
   const job=jobs[req.params.id];
@@ -229,5 +251,5 @@ app.get("/file/:id",(req,res)=>{
 
 ////////////////////////////////////////////////////////////
 
-const PORT=process.env.PORT||5000;
-app.listen(PORT,()=>console.log("SERVER RUNNING"));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log("SERVER RUNNING"));
