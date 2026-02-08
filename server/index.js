@@ -5,8 +5,8 @@ import path from "path";
 import { spawn } from "child_process";
 import { v4 as uuid } from "uuid";
 import { fileURLToPath } from "url";
+import ytdlp from "yt-dlp-exec";
 import ffmpegPath from "ffmpeg-static";
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +17,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 const FFMPEG_PATH = ffmpegPath;
+const YTDLP_PATH = ytdlp.path;   // 🔥 IMPORTANT FOR RENDER
 
 const TEMP = path.join(__dirname, "temp");
 if (!fs.existsSync(TEMP)) fs.mkdirSync(TEMP);
@@ -45,40 +46,52 @@ function mbToStr(mb){
   return mb.toFixed(2)+" MB";
 }
 
-/* VIDEO INFO */
+////////////////////////////////////////////////////////////
+//////////////////// VIDEO INFO ////////////////////////////
+////////////////////////////////////////////////////////////
+
 app.get("/video",(req,res)=>{
   const url=req.query.url;
-  const p=spawn("yt-dlp",["-J",url]);
+
+  const p = spawn(YTDLP_PATH, ["-J", url]);  // 🔥 FIXED
 
   let data="";
   p.stdout.on("data",d=>data+=d);
 
   p.on("close",()=>{
-    const json=JSON.parse(data);
+    try{
+      const json=JSON.parse(data);
 
-    const seen=new Set();
-    const formats=[];
-    json.formats.forEach(f=>{
-      if(f.vcodec!=="none" && f.height){
-        const q=`${f.height}p`;
-        if(!seen.has(q)){
-          seen.add(q);
-          formats.push({quality:q,format_id:f.format_id});
+      const seen=new Set();
+      const formats=[];
+      json.formats.forEach(f=>{
+        if(f.vcodec!=="none" && f.height){
+          const q=`${f.height}p`;
+          if(!seen.has(q)){
+            seen.add(q);
+            formats.push({quality:q,format_id:f.format_id});
+          }
         }
-      }
-    });
+      });
 
-    res.json({
-      title:json.title,
-      thumbnail:json.thumbnail,
-      duration:format(json.duration),
-      rawDuration:json.duration,
-      formats
-    });
+      res.json({
+        title:json.title,
+        thumbnail:json.thumbnail,
+        duration:format(json.duration),
+        rawDuration:json.duration,
+        formats
+      });
+
+    }catch{
+      res.status(500).json({error:"yt-dlp failed"});
+    }
   });
 });
 
-/* DOWNLOAD VIDEO */
+////////////////////////////////////////////////////////////
+//////////////////// DOWNLOAD VIDEO ////////////////////////
+////////////////////////////////////////////////////////////
+
 app.get("/download",(req,res)=>{
   const {url,format_id,title,thumbnail,duration}=req.query;
 
@@ -104,7 +117,7 @@ app.get("/download",(req,res)=>{
     url
   ];
 
-  const p=spawn("yt-dlp",args);
+  const p=spawn(YTDLP_PATH,args);  // 🔥 FIXED
 
   p.stdout.on("data",d=>{
     const line=d.toString();
@@ -126,7 +139,10 @@ app.get("/download",(req,res)=>{
   res.json({jobId:id});
 });
 
-/* MP3 */
+////////////////////////////////////////////////////////////
+//////////////////// MP3 ////////////////////////////
+////////////////////////////////////////////////////////////
+
 app.get("/mp3",(req,res)=>{
   const {url,title,thumbnail,duration}=req.query;
 
@@ -151,7 +167,7 @@ app.get("/mp3",(req,res)=>{
     url
   ];
 
-  const p=spawn("yt-dlp",args);
+  const p=spawn(YTDLP_PATH,args);  // 🔥 FIXED
 
   p.stdout.on("data",d=>{
     const line=d.toString();
@@ -173,68 +189,74 @@ app.get("/mp3",(req,res)=>{
   res.json({jobId:id});
 });
 
-/* PROGRESS */
+////////////////////////////////////////////////////////////
+//////////////////// PROGRESS ////////////////////////////
+////////////////////////////////////////////////////////////
+
 app.get("/progress/:id",(req,res)=>{
   res.json(jobs[req.params.id]||{});
 });
 
-/* FILE */
-app.get("/file/:id", (req, res) => {
-  const job = jobs[req.params.id];
-  if (!job) return res.send("Not ready");
+////////////////////////////////////////////////////////////
+//////////////////// FILE ////////////////////////////
+////////////////////////////////////////////////////////////
 
-  const fileMp4 = path.join(TEMP, `${req.params.id}.mp4`);
-  const fileMp3 = path.join(TEMP, `${req.params.id}.mp3`);
+app.get("/file/:id",(req,res)=>{
+  const job=jobs[req.params.id];
+  if(!job) return res.send("Not ready");
 
-  const file = fs.existsSync(fileMp4) ? fileMp4 : fileMp3;
-  if (!fs.existsSync(file)) return res.send("Not ready");
+  const fileMp4=path.join(TEMP,`${req.params.id}.mp4`);
+  const fileMp3=path.join(TEMP,`${req.params.id}.mp3`);
 
-  // sanitize title for filename
-  let safeTitle = job.title || "download";
-  safeTitle = safeTitle.replace(/[\\/:*?"<>|]/g, "");
+  const file=fs.existsSync(fileMp4)?fileMp4:fileMp3;
+  if(!fs.existsSync(file)) return res.send("Not ready");
 
-  const ext = file.endsWith(".mp3") ? ".mp3" : ".mp4";
-  const finalName = safeTitle + ext;
+  let safeTitle=job.title||"download";
+  safeTitle=safeTitle.replace(/[\\/:*?"<>|]/g,"");
 
-res.download(file, finalName, () => {
-  // wait before deleting so browser finishes download
-  setTimeout(() => {
-    fs.unlink(file, () => {});
-    delete jobs[req.params.id];
-  }, 13000); // 10 seconds
+  const ext=file.endsWith(".mp3")?".mp3":".mp4";
+  const finalName=safeTitle+ext;
+
+  res.download(file,finalName,()=>{
+    setTimeout(()=>{
+      fs.unlink(file,()=>{});
+      delete jobs[req.params.id];
+    },15000);
+  });
 });
 
-});
+////////////////////////////////////////////////////////////
+//////////////////// CANCEL ////////////////////////////
+////////////////////////////////////////////////////////////
 
-/* CANCEL */
 app.get("/cancel/:id",(req,res)=>{
   delete jobs[req.params.id];
   res.send("cancelled");
 });
 
+////////////////////////////////////////////////////////////
+//////////////////// CLEAN TEMP ////////////////////////////
+////////////////////////////////////////////////////////////
 
-/* ===== TEMP FILE CLEANER (optional safety) ===== */
 setInterval(()=>{
   fs.readdir(TEMP,(err,files)=>{
     if(err) return;
 
     files.forEach(f=>{
-      const filePath = path.join(TEMP,f);
+      const filePath=path.join(TEMP,f);
       fs.stat(filePath,(e,stat)=>{
         if(e) return;
 
-        const age = Date.now() - stat.mtimeMs;
-
-        // delete files older than 1 hour
-        if(age > 60 * 60 * 1000){
+        const age=Date.now()-stat.mtimeMs;
+        if(age>60*60*1000){
           fs.unlink(filePath,()=>{});
         }
       });
     });
   });
-}, 30 * 60 * 1000); // runs every 30 minutes
+},30*60*1000);
 
+////////////////////////////////////////////////////////////
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log("SERVER RUNNING"));
-
+const PORT=process.env.PORT||5000;
+app.listen(PORT,()=>console.log("SERVER RUNNING"));
