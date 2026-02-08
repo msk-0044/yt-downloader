@@ -53,24 +53,24 @@ app.get("/video", async (req, res) => {
   const url = req.query.url;
 
   try {
-    // TRY 1 — normal cookies
     let json = await ytdlp(url, {
       dumpSingleJson: true,
       cookies: COOKIE_PATH,
       noWarnings: true,
+      noCheckCertificates: true,
       addHeader: [
-        "user-agent:Mozilla/5.0",
+        "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         "accept-language:en-US,en;q=0.9"
-      ]
+      ],
+      extractorArgs: "youtube:player_client=web"
     });
 
     return sendFormats(json, res);
 
-  } catch (e) {
-    console.log("TRY 1 FAILED → android fallback");
+  } catch {
+    console.log("WEB FAILED → ANDROID TRY");
 
     try {
-      // TRY 2 — android client (stronger)
       let json = await ytdlp(url, {
         dumpSingleJson: true,
         cookies: COOKIE_PATH,
@@ -82,8 +82,8 @@ app.get("/video", async (req, res) => {
 
       return sendFormats(json, res);
 
-    } catch (e2) {
-      console.log("TRY 2 FAILED → fallback 360p");
+    } catch {
+      console.log("STILL BLOCKED → fallback");
 
       return res.json({
         title: "Video available (limited)",
@@ -95,6 +95,7 @@ app.get("/video", async (req, res) => {
     }
   }
 });
+
 
 function sendFormats(json, res){
   const seen = new Set();
