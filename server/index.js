@@ -53,25 +53,31 @@ app.get("/video", async (req, res) => {
   const url = req.query.url;
 
   try {
-    // try normal
+    // TRY 1 — normal cookies
     let json = await ytdlp(url, {
       dumpSingleJson: true,
+      cookies: COOKIE_PATH,
       noWarnings: true,
-      cookies: COOKIE_PATH
+      addHeader: [
+        "user-agent:Mozilla/5.0",
+        "accept-language:en-US,en;q=0.9"
+      ]
     });
 
     return sendFormats(json, res);
 
   } catch (e) {
-    console.log("TRY 1 FAILED");
+    console.log("TRY 1 FAILED → android fallback");
 
     try {
-      // android fallback
+      // TRY 2 — android client (stronger)
       let json = await ytdlp(url, {
         dumpSingleJson: true,
-        noWarnings: true,
         cookies: COOKIE_PATH,
-        extractorArgs: "youtube:player_client=android"
+        extractorArgs: "youtube:player_client=android",
+        addHeader: [
+          "user-agent:com.google.android.youtube/19.29.37"
+        ]
       });
 
       return sendFormats(json, res);
@@ -164,7 +170,7 @@ app.get("/download", async (req, res) => {
 });
 
 ////////////////////////////////////////////////////////////
-//////////////////// MP3 /////////////////////////////////
+//////////////////// MP3 ///////////////////////////////////
 ////////////////////////////////////////////////////////////
 
 app.get("/mp3", async (req, res) => {
