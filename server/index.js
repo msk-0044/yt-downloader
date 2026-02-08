@@ -57,7 +57,11 @@ app.get("/video", async (req, res) => {
       noWarnings: true,
       noCheckCertificates: true,
       preferFreeFormats: true,
-      addHeader: ["user-agent:Mozilla/5.0"]
+
+      extractorArgs: "youtube:player_client=android",
+      addHeader: [
+        "user-agent:com.google.android.youtube/17.31.35 (Linux; U; Android 11)"
+      ]
     });
 
     const seen = new Set();
@@ -86,6 +90,7 @@ app.get("/video", async (req, res) => {
     res.status(500).send("Failed to fetch video info");
   }
 });
+
 
 ////////////////////////////////////////////////////////////
 //////////////////// DOWNLOAD VIDEO ////////////////////////
