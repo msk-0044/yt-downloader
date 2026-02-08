@@ -16,6 +16,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 const FFMPEG_PATH = ffmpegPath;
+const COOKIE_PATH = path.join(__dirname, "cookies.txt"); // ⭐ cookies
 
 const TEMP = path.join(__dirname, "temp");
 if (!fs.existsSync(TEMP)) fs.mkdirSync(TEMP);
@@ -55,13 +56,7 @@ app.get("/video", async (req, res) => {
     const json = await ytdlp(url, {
       dumpSingleJson: true,
       noWarnings: true,
-      noCheckCertificates: true,
-      preferFreeFormats: true,
-
-      extractorArgs: "youtube:player_client=android",
-      addHeader: [
-        "user-agent:com.google.android.youtube/17.31.35 (Linux; U; Android 11)"
-      ]
+      cookies: COOKIE_PATH,   // ⭐⭐⭐ IMPORTANT
     });
 
     const seen = new Set();
@@ -91,134 +86,111 @@ app.get("/video", async (req, res) => {
   }
 });
 
-
 ////////////////////////////////////////////////////////////
-//////////////////// DOWNLOAD VIDEO ////////////////////////
+//////////////////// DOWNLOAD //////////////////////////////
 ////////////////////////////////////////////////////////////
 
 app.get("/download", async (req, res) => {
-  try {
-    const { url, format_id, title, thumbnail, duration } = req.query;
+  const { url, format_id, title, thumbnail, duration } = req.query;
 
-    const id = uuid();
-    const file = path.join(TEMP, `${id}.mp4`);
+  const id = uuid();
+  const file = path.join(TEMP, `${id}.mp4`);
 
-    jobs[id] = {
-      progress: 0,
-      downloaded: "0 MB",
-      total: "0 MB",
-      title,
-      thumbnail,
-      duration: format(duration),
-      status: "downloading"
-    };
+  jobs[id] = {
+    progress: 0,
+    downloaded: "0 MB",
+    total: "0 MB",
+    title,
+    thumbnail,
+    duration: format(duration),
+    status: "downloading"
+  };
 
-    const process = ytdlp.exec(url, {
-      format: `${format_id}+bestaudio`,
-      mergeOutputFormat: "mp4",
-      output: file,
-      ffmpegLocation: FFMPEG_PATH,
-      noWarnings: true,
-      noCheckCertificates: true,
-      addHeader: ["user-agent:Mozilla/5.0"]
-    });
+  const process = ytdlp.exec(url, {
+    format: `${format_id}+bestaudio`,
+    mergeOutputFormat: "mp4",
+    output: file,
+    ffmpegLocation: FFMPEG_PATH,
+    cookies: COOKIE_PATH   // ⭐
+  });
 
-    process.stdout.on("data", d => {
-      const line = d.toString();
+  process.stdout.on("data", d => {
+    const line = d.toString();
 
-      const prog = line.match(/(\d+\.?\d*)%/);
-      if (prog) jobs[id].progress = parseFloat(prog[1]);
+    const prog = line.match(/(\d+\.?\d*)%/);
+    if (prog) jobs[id].progress = parseFloat(prog[1]);
 
-      const tot = line.match(/of\s+([\d\.]+\w+B)/);
-      if (tot) {
-        jobs[id].total = tot[1];
-        const totalMB = sizeToMB(tot[1]);
-        const done = (totalMB * jobs[id].progress) / 100;
-        jobs[id].downloaded = mbToStr(done);
-      }
-    });
+    const tot = line.match(/of\s+([\d\.]+\w+B)/);
+    if (tot) {
+      jobs[id].total = tot[1];
+      const totalMB = sizeToMB(tot[1]);
+      const done = (totalMB * jobs[id].progress) / 100;
+      jobs[id].downloaded = mbToStr(done);
+    }
+  });
 
-    process.on("close", () => {
-      jobs[id].progress = 100;
-    });
+  process.on("close", () => {
+    jobs[id].progress = 100;
+  });
 
-    res.json({ jobId: id });
-
-  } catch (e) {
-    console.log("DOWNLOAD ERROR:", e);
-    res.status(500).send("Download failed");
-  }
+  res.json({ jobId: id });
 });
 
 ////////////////////////////////////////////////////////////
-//////////////////// MP3 ////////////////////////////
+//////////////////// MP3 //////////////////////////////////
 ////////////////////////////////////////////////////////////
 
 app.get("/mp3", async (req, res) => {
-  try {
-    const { url, title, thumbnail, duration } = req.query;
+  const { url, title, thumbnail, duration } = req.query;
 
-    const id = uuid();
-    const fileBase = path.join(TEMP, id);
+  const id = uuid();
+  const fileBase = path.join(TEMP, id);
 
-    jobs[id] = {
-      progress: 0,
-      downloaded: "0 MB",
-      total: "0 MB",
-      title,
-      thumbnail,
-      duration: format(duration),
-      status: "downloading"
-    };
+  jobs[id] = {
+    progress: 0,
+    downloaded: "0 MB",
+    total: "0 MB",
+    title,
+    thumbnail,
+    duration: format(duration),
+    status: "downloading"
+  };
 
-    const process = ytdlp.exec(url, {
-      extractAudio: true,
-      audioFormat: "mp3",
-      output: `${fileBase}.%(ext)s`,
-      ffmpegLocation: FFMPEG_PATH,
-      noWarnings: true,
-      noCheckCertificates: true,
-      addHeader: ["user-agent:Mozilla/5.0"]
-    });
+  const process = ytdlp.exec(url, {
+    extractAudio: true,
+    audioFormat: "mp3",
+    output: `${fileBase}.%(ext)s`,
+    ffmpegLocation: FFMPEG_PATH,
+    cookies: COOKIE_PATH   // ⭐
+  });
 
-    process.stdout.on("data", d => {
-      const line = d.toString();
+  process.stdout.on("data", d => {
+    const line = d.toString();
 
-      const prog = line.match(/(\d+\.?\d*)%/);
-      if (prog) jobs[id].progress = parseFloat(prog[1]);
+    const prog = line.match(/(\d+\.?\d*)%/);
+    if (prog) jobs[id].progress = parseFloat(prog[1]);
 
-      const tot = line.match(/of\s+([\d\.]+\w+B)/);
-      if (tot) {
-        jobs[id].total = tot[1];
-        const totalMB = sizeToMB(tot[1]);
-        const done = (totalMB * jobs[id].progress) / 100;
-        jobs[id].downloaded = mbToStr(done);
-      }
-    });
+    const tot = line.match(/of\s+([\d\.]+\w+B)/);
+    if (tot) {
+      jobs[id].total = tot[1];
+      const totalMB = sizeToMB(tot[1]);
+      const done = (totalMB * jobs[id].progress) / 100;
+      jobs[id].downloaded = mbToStr(done);
+    }
+  });
 
-    process.on("close", () => {
-      jobs[id].progress = 100;
-    });
+  process.on("close", () => {
+    jobs[id].progress = 100;
+  });
 
-    res.json({ jobId: id });
-
-  } catch (e) {
-    console.log("MP3 ERROR:", e);
-    res.status(500).send("MP3 failed");
-  }
+  res.json({ jobId: id });
 });
 
-////////////////////////////////////////////////////////////
-//////////////////// PROGRESS ////////////////////////////
 ////////////////////////////////////////////////////////////
 
 app.get("/progress/:id",(req,res)=>{
   res.json(jobs[req.params.id]||{});
 });
-
-////////////////////////////////////////////////////////////
-//////////////////// FILE ////////////////////////////
-////////////////////////////////////////////////////////////
 
 app.get("/file/:id",(req,res)=>{
   const job=jobs[req.params.id];
@@ -243,28 +215,6 @@ app.get("/file/:id",(req,res)=>{
     },15000);
   });
 });
-
-////////////////////////////////////////////////////////////
-//////////////////// CLEAN TEMP ////////////////////////////
-////////////////////////////////////////////////////////////
-
-setInterval(()=>{
-  fs.readdir(TEMP,(err,files)=>{
-    if(err) return;
-
-    files.forEach(f=>{
-      const filePath=path.join(TEMP,f);
-      fs.stat(filePath,(e,stat)=>{
-        if(e) return;
-
-        const age=Date.now()-stat.mtimeMs;
-        if(age>60*60*1000){
-          fs.unlink(filePath,()=>{});
-        }
-      });
-    });
-  });
-},30*60*1000);
 
 ////////////////////////////////////////////////////////////
 
