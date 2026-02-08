@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
-import { spawn } from "child_process";
 import { v4 as uuid } from "uuid";
 import { fileURLToPath } from "url";
 import ytdlp from "yt-dlp-exec";
@@ -17,7 +16,6 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 const FFMPEG_PATH = ffmpegPath;
-const YTDLP_PATH = ytdlp.path;   // 🔥 IMPORTANT FOR RENDER
 
 const TEMP = path.join(__dirname, "temp");
 if (!fs.existsSync(TEMP)) fs.mkdirSync(TEMP);
@@ -58,7 +56,8 @@ app.get("/video", async (req, res) => {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      preferFreeFormats: true
+      preferFreeFormats: true,
+      addHeader: ["user-agent:Mozilla/5.0"]
     });
 
     const seen = new Set();
@@ -88,7 +87,6 @@ app.get("/video", async (req, res) => {
   }
 });
 
-
 ////////////////////////////////////////////////////////////
 //////////////////// DOWNLOAD VIDEO ////////////////////////
 ////////////////////////////////////////////////////////////
@@ -114,7 +112,10 @@ app.get("/download", async (req, res) => {
       format: `${format_id}+bestaudio`,
       mergeOutputFormat: "mp4",
       output: file,
-      ffmpegLocation: FFMPEG_PATH
+      ffmpegLocation: FFMPEG_PATH,
+      noWarnings: true,
+      noCheckCertificates: true,
+      addHeader: ["user-agent:Mozilla/5.0"]
     });
 
     process.stdout.on("data", d => {
@@ -144,7 +145,6 @@ app.get("/download", async (req, res) => {
   }
 });
 
-
 ////////////////////////////////////////////////////////////
 //////////////////// MP3 ////////////////////////////
 ////////////////////////////////////////////////////////////
@@ -170,7 +170,10 @@ app.get("/mp3", async (req, res) => {
       extractAudio: true,
       audioFormat: "mp3",
       output: `${fileBase}.%(ext)s`,
-      ffmpegLocation: FFMPEG_PATH
+      ffmpegLocation: FFMPEG_PATH,
+      noWarnings: true,
+      noCheckCertificates: true,
+      addHeader: ["user-agent:Mozilla/5.0"]
     });
 
     process.stdout.on("data", d => {
@@ -234,15 +237,6 @@ app.get("/file/:id",(req,res)=>{
       delete jobs[req.params.id];
     },15000);
   });
-});
-
-////////////////////////////////////////////////////////////
-//////////////////// CANCEL ////////////////////////////
-////////////////////////////////////////////////////////////
-
-app.get("/cancel/:id",(req,res)=>{
-  delete jobs[req.params.id];
-  res.send("cancelled");
 });
 
 ////////////////////////////////////////////////////////////
