@@ -56,7 +56,17 @@ app.get("/video", async (req, res) => {
     const json = await ytdlp(url, {
       dumpSingleJson: true,
       noWarnings: true,
-      cookies: COOKIE_PATH,   // ⭐⭐⭐ IMPORTANT
+      noCheckCertificates: true,
+      preferFreeFormats: true,
+
+      cookies: "./cookies.txt",
+
+      extractorArgs: "youtube:player_client=android",
+
+      addHeader: [
+        "user-agent:Mozilla/5.0",
+        "accept-language:en-US,en;q=0.9"
+      ]
     });
 
     const seen = new Set();
@@ -81,10 +91,11 @@ app.get("/video", async (req, res) => {
     });
 
   } catch (e) {
-    console.log("VIDEO ERROR:", e);
+    console.log("VIDEO ERROR:", e.stderr || e);
     res.status(500).send("Failed to fetch video info");
   }
 });
+
 
 ////////////////////////////////////////////////////////////
 //////////////////// DOWNLOAD //////////////////////////////
